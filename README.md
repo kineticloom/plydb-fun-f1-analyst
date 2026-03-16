@@ -168,68 +168,55 @@ See `data-dictionary.md` for the full column-level reference.
 Open Claude Code (or any PlyDB-compatible agent) in this directory and start
 asking questions. The agent will use PlyDB to query the data and return results.
 
+The real joy is the questions you'd never bother with if answering them required
+writing code.
+
 ### Sample prompts
 
-**Pace & lap times**
+**Who's on championship pace right now?** Find every season where the eventual
+champion sat in their current points position after the same number of rounds.
+History doesn't repeat exactly, but the early-season signal is stronger than
+most people think — and the exceptions are just as interesting as the pattern.
 
-> Who set the fastest lap in the 2024 Bahrain Race, and what tyre were they on?
+**New regulations, new pecking order?** The 2026 season brought the most
+sweeping rule changes in years. Ask the AI to rank every previous
+regulation-change season by how dramatically the constructor standings shifted
+from the prior year, then track whether the gaps between teams narrowed or
+widened as those seasons progressed. Which team profile tends to close the gap
+fastest once development gets going?
 
-> Compare VER and LEC's average lap time at Monaco Qualifying 2024. Who was
-> faster in each sector?
+**How is your driver settling in?** Several drivers switched teams over the
+winter. Ask the AI to pull their lap time deltas and qualifying gaps at circuits
+they've visited before, across their previous teams versus their current one.
+Already at their historical baseline? Still finding their feet? The data will
+tell you.
 
-> Which team had the best average race pace across all 2024 events, excluding
-> laps behind the safety car?
+**Did the fastest car always win the championship?** Compare each constructor's
+average qualifying position — a clean proxy for raw pace — against their final
+points standing, season by season. In some years the gap is stark. In others,
+strategy, reliability, and driver talent tell a completely different story.
 
-> Plot the lap time progression for the top 5 finishers in the 2024 Brazilian
-> Grand Prix — how did tyre degradation affect each driver?
+**Which circuits punish qualifying pace the most?** Look at the delta between a
+driver's qualifying position and their finishing position, across every race at
+every track. Some venues consistently shuffle the order; others don't. Which
+ones, and why?
 
-**Strategy & tyres**
+**What's the real cost of a safety car?** Pit stop windows compress. Strategy
+calls get forced. Ask the AI to find every safety car period in a season and
+compare the finishing order to where drivers would have ended up on pure pace.
 
-> What was the average stint length per compound across the 2024 season? Which
-> team ran the longest stints?
+**Is there a "tyre cliff" in the data?** Ask the AI to plot lap time degradation
+by compound and stint length across different circuits. When does the cliff
+actually arrive, and does it show up in the numbers before teams react to it?
 
-> How many pit stops did the race winner make in each round of 2024, and did
-> one-stop or two-stop strategies win more often?
+**Rain and chaos:** Which sessions had rainfall, and by how much did lap times
+swing? Which drivers consistently perform above their season average in mixed
+conditions?
 
-> Which drivers started on the Soft compound most frequently, and how did their
-> race results compare to drivers who started on Mediums?
-
-**Championship & results**
-
-> How did the 2024 Drivers' Championship standings evolve round by round?
-
-> Which drivers gained the most positions on average from grid to finish across
-> the 2024 season?
-
-> Show the constructors' points tally after each round of 2024 as a cumulative
-> table.
-
-**Telemetry**
-
-> What was the top speed recorded at each circuit in 2024? Which track produced
-> the highest maximum speed?
-
-> At what percentage of the lap is VER typically at full throttle at Monza?
-> Compare with the Monaco circuit.
-
-> Show the DRS usage pattern for the 2024 Italian Grand Prix — which drivers
-> activated DRS most frequently?
-
-**Weather & conditions**
-
-> Which 2024 races had the highest track temperatures, and did that correlate
-> with more tyre deg (faster lap time drop-off across a stint)?
-
-> Were there any sessions in 2024 where rainfall was detected? How did lap times
-> change when the rain started?
-
-**Open-ended**
-
-> Analyze the 2024 season and identify the three most interesting strategic
-> storylines. Back each one up with data.
-
-> Which driver had the biggest gap between their qualifying pace and their race
-> pace in 2024? What might explain it?
+**Telemetry deep dives:** At Monaco, what percentage of the lap are drivers at
+full throttle? Compare that to Monza. Ask your agent to find the corner where
+VER carries the most minimum speed — then ask the same question about Hamilton
+at his peak.
 
 ---
 
