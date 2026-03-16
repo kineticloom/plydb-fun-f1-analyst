@@ -3,7 +3,8 @@
 Reference for the Parquet files written by `scripts/download_f1_data.py` from
 FastF1.
 
-All files live under `data/fastf1/{year}/{event_slug}/{session_type}/`.
+Files are written in Hive-partitioned layout:
+`data/fastf1/Season={year}/Location={location}/RoundNumber={round}/Session={session}/`.
 
 ---
 
@@ -227,7 +228,7 @@ All timedelta columns are stored with `_ns` suffix (nanoseconds).
 ## `schedule.parquet`
 
 One row per event in the season. Written to
-`data/fastf1/{year}/schedule.parquet` (not inside an event subdirectory).
+`data/fastf1/Season={year}/schedule.parquet` (season-level, not inside a session subdirectory).
 
 | Column                        | Type         | Description                                                                 |
 | ----------------------------- | ------------ | --------------------------------------------------------------------------- |

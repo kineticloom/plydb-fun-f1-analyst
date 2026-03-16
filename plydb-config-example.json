@@ -6,7 +6,7 @@
         "description": "Per-lap timing data: lap times, sector times, tyre compound and life, speed traps, position, and track status. One row per lap per driver. Primary dataset for pace and strategy analysis."
       },
       "type": "file",
-      "path": "data/fastf1/*/*/*/laps.parquet",
+      "path": "data/fastf1/Season=*/Location=*/RoundNumber=*/Session=*/laps.parquet",
       "format": "parquet"
     },
     "f1_results": {
@@ -15,7 +15,7 @@
         "description": "Session classification per driver: finishing position, points, grid position, Q1/Q2/Q3 times, and driver/team identity. One row per driver per session."
       },
       "type": "file",
-      "path": "data/fastf1/*/*/*/results.parquet",
+      "path": "data/fastf1/Season=*/Location=*/RoundNumber=*/Session=*/results.parquet",
       "format": "parquet"
     },
     "f1_weather": {
@@ -24,7 +24,7 @@
         "description": "Weather samples taken ~once per minute throughout each session: air and track temperature, humidity, wind direction and speed, pressure, and rainfall flag."
       },
       "type": "file",
-      "path": "data/fastf1/*/*/*/weather.parquet",
+      "path": "data/fastf1/Season=*/Location=*/RoundNumber=*/Session=*/weather.parquet",
       "format": "parquet"
     },
     "f1_telemetry": {
@@ -33,7 +33,7 @@
         "description": "Merged and interpolated car + position telemetry sampled at ~240 Hz. Includes speed, RPM, gear, throttle, brake, DRS, X/Y/Z coordinates, lap distance, and gap to driver ahead. Best default for telemetry queries."
       },
       "type": "file",
-      "path": "data/fastf1/*/*/*/telemetry.parquet",
+      "path": "data/fastf1/Season=*/Location=*/RoundNumber=*/Session=*/telemetry.parquet",
       "format": "parquet"
     },
     "f1_car_data": {
@@ -42,7 +42,7 @@
         "description": "Raw car telemetry sampled at ~240 Hz: speed, RPM, gear, throttle position, brake, and DRS state. Use when you need unmerged car data without position channels."
       },
       "type": "file",
-      "path": "data/fastf1/*/*/*/car_data.parquet",
+      "path": "data/fastf1/Season=*/Location=*/RoundNumber=*/Session=*/car_data.parquet",
       "format": "parquet"
     },
     "f1_pos_data": {
@@ -51,7 +51,7 @@
         "description": "Raw GPS/positional telemetry sampled at ~15-20 Hz: X, Y, Z coordinates in circuit-relative space (1/10 metre units) and on/off track status."
       },
       "type": "file",
-      "path": "data/fastf1/*/*/*/pos_data.parquet",
+      "path": "data/fastf1/Season=*/Location=*/RoundNumber=*/Session=*/pos_data.parquet",
       "format": "parquet"
     },
     "f1_schedule": {
@@ -60,7 +60,7 @@
         "description": "Season event calendar: round numbers, event names, countries, locations, session dates, and event format (conventional vs sprint weekend)."
       },
       "type": "file",
-      "path": "data/fastf1/*/schedule.parquet",
+      "path": "data/fastf1/Season=*/schedule.parquet",
       "format": "parquet"
     }
   },

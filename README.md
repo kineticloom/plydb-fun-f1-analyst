@@ -52,21 +52,24 @@ Parquet files (zstd compressed) to `data/fastf1/`.
 
 ```
 data/fastf1/
-└── {year}/
+└── Season={year}/
     ├── schedule.parquet
-    └── {event_slug}/
-        └── {session_type}/
-            ├── laps.parquet
-            ├── results.parquet
-            ├── weather.parquet
-            ├── telemetry.parquet
-            ├── car_data.parquet
-            └── pos_data.parquet
+    └── Location={location}/
+        └── RoundNumber={round}/
+            └── Session={session}/
+                ├── laps.parquet
+                ├── results.parquet
+                ├── weather.parquet
+                ├── telemetry.parquet
+                ├── car_data.parquet
+                └── pos_data.parquet
 ```
 
-Every file includes `Season`, `RoundNumber`, `EventName`, `Country`, `Location`,
-and `Session` columns so data from multiple races and seasons can be queried
-together without any path parsing.
+The Hive-style layout (`Season=`, `Location=`, `RoundNumber=`, `Session=`)
+enables partition pruning when querying a subset of seasons or sessions. Every
+file also includes `Season`, `RoundNumber`, `EventName`, `Country`, `Location`,
+and `Session` as explicit columns so cross-race queries work without any path
+parsing.
 
 ### Quick examples
 

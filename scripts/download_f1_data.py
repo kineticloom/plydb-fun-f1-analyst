@@ -2,8 +2,9 @@
 """
 Download F1 data from FastF1 and save as Parquet files (zstd compressed).
 
-Output layout:
-  /data/fastf1/{year}/{event_slug}/{session_type}/{object_type}.parquet
+Output layout (Hive-partitioned):
+  data/fastf1/Season={year}/Location={location}/RoundNumber={round}/Session={session}/{object_type}.parquet
+  data/fastf1/Season={year}/schedule.parquet
 
 Examples:
   # Download all object types for the 2024 Bahrain GP Race
@@ -69,16 +70,22 @@ RETRY_DELAYS = [30, 60, 120]
 # ---------------------------------------------------------------------------
 
 
-def slugify(name: str) -> str:
-    """Convert an event/session name to a filesystem-safe slug."""
-    name = name.lower().strip()
-    name = re.sub(r"[^\w\s-]", "", name)
-    name = re.sub(r"[\s_]+", "_", name)
-    return name
+def hive_val(val) -> str:
+    """Sanitize a value for use in a Hive partition directory name (e.g. Key=Value)."""
+    s = str(val).strip()
+    s = re.sub(r"[^\w\s-]", "", s)   # drop chars problematic on most filesystems
+    s = re.sub(r"[\s]+", "_", s)      # spaces → underscores
+    return s
 
 
-def session_dir(year: int, event_name: str, session_name: str) -> Path:
-    d = DATA_DIR / str(year) / slugify(event_name) / slugify(session_name)
+def session_dir(year: int, location: str, round_number: int, session_name: str) -> Path:
+    d = (
+        DATA_DIR
+        / f"Season={hive_val(year)}"
+        / f"Location={hive_val(location)}"
+        / f"RoundNumber={hive_val(round_number)}"
+        / f"Session={hive_val(session_name)}"
+    )
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -175,7 +182,7 @@ def extract_pos_data(session, drivers: Optional[List[str]]) -> pd.DataFrame:
 def download_schedule(year: int) -> None:
     print(f"\nDownloading {year} season schedule …")
     schedule = fastf1.get_event_schedule(year)
-    out = DATA_DIR / str(year) / "schedule.parquet"
+    out = DATA_DIR / f"Season={hive_val(year)}" / "schedule.parquet"
     out.parent.mkdir(parents=True, exist_ok=True)
     save_parquet(pd.DataFrame(schedule), out, meta={"Season": year})
 
@@ -249,6 +256,8 @@ def download_session(
 ) -> None:
     session_name = resolve_session_name(session_id)
     event_name = event["EventName"] if hasattr(event, "__getitem__") else str(event)
+    location = event["Location"] if hasattr(event, "__getitem__") else event_name
+    round_number = int(event["RoundNumber"]) if hasattr(event, "__getitem__") else 0
 
     print(f"\n--- {year} · {event_name} · {session_name} ---")
 
@@ -276,11 +285,11 @@ def download_session(
         "RoundNumber": int(event["RoundNumber"]) if hasattr(event, "__getitem__") else None,
         "EventName":   event_name,
         "Country":     event["Country"] if hasattr(event, "__getitem__") else None,
-        "Location":    event["Location"] if hasattr(event, "__getitem__") else None,
+        "Location":    location,
         "Session":     session_name,
     }
 
-    out_dir = session_dir(year, event_name, session_name)
+    out_dir = session_dir(year, location, round_number, session_name)
 
     extractor_map = {
         "laps":      lambda: extract_laps(sess),
