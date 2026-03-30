@@ -1,0 +1,1155 @@
+# yaml-language-server: $schema=.claude/skills/plydb/references/OSI/core-spec/osi-schema.json
+
+# Semantic overlay for the F1 FastF1 dataset.
+# Apply with: plydb semantic-context --config plydb-config-example.json --semantic-context-overlay plydb-overlay.yaml
+
+version: "1.0"
+
+semantic_model:
+  - name: f1_fastf1
+    description: >
+      Formula 1 telemetry and timing data sourced from FastF1, covering
+      sessions from 2018 onwards. Data spans laps, session results, car
+      telemetry, GPS position, and weather. All tables share common metadata
+      columns (Season, RoundNumber, EventName, Country, Location, Session)
+      that serve as the join spine across datasets.
+    ai_context:
+      instructions: >
+        This model contains FastF1 F1 timing and telemetry data.
+
+        CRITICAL — time/duration encoding: all lap times, sector times, and
+        session elapsed times are stored as float64 columns with a "_ns" suffix
+        (nanoseconds). Always divide by 1e9 to convert to seconds. Do not treat
+        these as raw seconds.
+
+        For reliable pace analysis, always filter laps on IsAccurate = true AND
+        TrackStatus = '1' (green flag, no safety car or flags). Laps that cross
+        a safety car period or have deleted times should be excluded.
+
+        Driver identity: the "Driver" column in laps/telemetry/car_data/pos_data
+        is a three-letter abbreviation (e.g. "VER", "LEC"). This matches the
+        "Abbreviation" column in results.
+
+        All datasets share the join spine:
+          Season, RoundNumber, EventName, Country, Location, Session.
+        Use these to combine datasets across multiple races or seasons.
+
+      examples:
+        - "Who set the fastest lap in the 2024 Bahrain Race?"
+        - "How does VER's average lap time compare to PER at Monaco Qualifying?"
+        - "What compound was on the tyres for the fastest laps?"
+        - "How much track temperature changed during the race?"
+        - "Which driver gained the most positions in the 2024 season?"
+        - "What was the top speed recorded at Monza?"
+        - "How does throttle trace differ between team-mates through sector 2?"
+
+    datasets:
+
+      # -----------------------------------------------------------------------
+      - name: laps
+        source: f1_laps.default.f1_laps
+        primary_key: [Season, RoundNumber, Session, Driver, LapNumber]
+        description: >
+          Per-lap timing data. One row per driver per lap per session.
+          The primary dataset for pace, strategy, and position analysis.
+          Covers lap times, sector splits, tyre information, speed trap
+          readings, and on-track position.
+        ai_context:
+          synonyms:
+            - "lap times"
+            - "lap data"
+            - "timing data"
+            - "stint data"
+          instructions: >
+            Filter on IsAccurate = true for reliable pace comparisons.
+            Filter on TrackStatus = '1' to include only green-flag laps.
+            LapTime_ns, Sector1Time_ns, Sector2Time_ns, Sector3Time_ns are all
+            in nanoseconds — divide by 1e9 for seconds.
+            Position is only populated for Race sessions, not qualifying or practice.
+            PitInTime_ns is non-NULL only on in-laps; PitOutTime_ns only on out-laps.
+
+        fields:
+          - name: Season
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Season
+            description: Championship year, e.g. 2024.
+            dimension:
+              is_time: true
+
+          - name: RoundNumber
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: RoundNumber
+            description: Round number within the season (1-indexed).
+
+          - name: EventName
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: EventName
+            description: Full official event name, e.g. "Bahrain Grand Prix".
+            ai_context:
+              synonyms: ["race", "grand prix", "GP", "event"]
+
+          - name: Session
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Session
+            description: >
+              Session long name. Values: "Race", "Qualifying", "Practice 1",
+              "Practice 2", "Practice 3", "Sprint", "Sprint Qualifying",
+              "Sprint Shootout".
+            ai_context:
+              synonyms: ["session type"]
+
+          - name: Driver
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Driver
+            description: >
+              Three-letter driver abbreviation, e.g. "VER", "LEC", "HAM".
+              Matches the Abbreviation column in the results table.
+            ai_context:
+              synonyms: ["driver code", "driver abbreviation"]
+
+          - name: LapTime_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: LapTime_ns
+            description: >
+              Total lap duration in nanoseconds. Divide by 1e9 for seconds.
+              NULL for pit in/out laps and the formation lap.
+            ai_context:
+              synonyms: ["lap time", "lap duration"]
+
+          - name: LapNumber
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: LapNumber
+            description: Lap number within the session (1-indexed).
+
+          - name: Stint
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Stint
+            description: >
+              Tyre stint number, increments by 1 after each pit stop.
+              Stint 1 = first set of tyres.
+
+          - name: Compound
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Compound
+            description: >
+              Tyre compound. Values: SOFT, MEDIUM, HARD, INTERMEDIATE, WET, UNKNOWN.
+            ai_context:
+              synonyms: ["tyre", "tire", "rubber", "compound"]
+
+          - name: TyreLife
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: TyreLife
+            description: >
+              Number of laps completed on the current tyre set, including any
+              laps from a prior session on the same set.
+            ai_context:
+              synonyms: ["tyre age", "tire age", "laps on tyre"]
+
+          - name: FreshTyre
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: FreshTyre
+            description: >
+              true if this tyre set had not been used in any prior session.
+
+          - name: IsAccurate
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: IsAccurate
+            description: >
+              true if sector times and speed trap values are considered reliable
+              by FastF1. Filter on IsAccurate = true for any pace analysis.
+
+          - name: TrackStatus
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: TrackStatus
+            description: >
+              String of concatenated track status codes active during the lap.
+              '1'=green (clear), '2'=yellow flag, '4'=Safety Car,
+              '5'=Red Flag, '6'=Virtual Safety Car deployed,
+              '7'=Virtual Safety Car ending.
+              A value of '1' means the entire lap was green. '12' means yellow
+              was shown at some point. Use TrackStatus = '1' to isolate
+              representative green-flag lap times.
+            ai_context:
+              synonyms: ["flag status", "safety car", "yellow flag", "VSC", "SC"]
+
+          - name: Position
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Position
+            description: >
+              Race position at the end of this lap. Only populated for Race
+              sessions. NULL in qualifying and practice.
+
+          - name: IsPersonalBest
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: IsPersonalBest
+            description: >
+              true if this is the driver's fastest lap up to this point in
+              the session.
+
+          - name: Sector1Time_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Sector1Time_ns
+            description: Sector 1 duration in nanoseconds. Divide by 1e9 for seconds.
+            ai_context:
+              synonyms: ["S1", "sector 1"]
+
+          - name: Sector2Time_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Sector2Time_ns
+            description: Sector 2 duration in nanoseconds. Divide by 1e9 for seconds.
+            ai_context:
+              synonyms: ["S2", "sector 2"]
+
+          - name: Sector3Time_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Sector3Time_ns
+            description: Sector 3 duration in nanoseconds. Divide by 1e9 for seconds.
+            ai_context:
+              synonyms: ["S3", "sector 3"]
+
+          - name: SpeedI1
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: SpeedI1
+            description: Speed (km/h) at the Intermediate 1 speed trap.
+
+          - name: SpeedI2
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: SpeedI2
+            description: Speed (km/h) at the Intermediate 2 speed trap.
+
+          - name: SpeedFL
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: SpeedFL
+            description: Speed (km/h) at the finish line speed trap.
+
+          - name: SpeedST
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: SpeedST
+            description: >
+              Speed (km/h) at the longest straight speed trap.
+              Best proxy for top speed from the laps table.
+            ai_context:
+              synonyms: ["top speed", "straight line speed", "speed trap"]
+
+          - name: PitInTime_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: PitInTime_ns
+            description: >
+              Session elapsed time when the car entered the pit lane (ns).
+              Non-NULL only on pit in-laps. Use to identify pit stops.
+
+          - name: PitOutTime_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: PitOutTime_ns
+            description: >
+              Session elapsed time when the car exited the pit lane (ns).
+              Non-NULL only on pit out-laps.
+
+          - name: Team
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Team
+            description: >
+              Constructor name, e.g. "Red Bull Racing", "Ferrari", "Mercedes".
+              Matches TeamName in results.
+            ai_context:
+              synonyms: ["constructor", "team name"]
+
+          - name: Deleted
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Deleted
+            description: >
+              "True" (string) if the stewards deleted this lap time.
+              NULL otherwise. Filter Deleted IS NULL or Deleted != 'True'
+              to exclude deleted laps.
+
+      # -----------------------------------------------------------------------
+      - name: results
+        source: f1_results.default.f1_results
+        primary_key: [Season, RoundNumber, Session, Abbreviation]
+        description: >
+          Session classification. One row per driver per session.
+          Contains finishing position, championship points, grid position,
+          qualifying times, and full driver and team identity.
+        ai_context:
+          synonyms:
+            - "classification"
+            - "finishing order"
+            - "qualifying results"
+            - "race results"
+
+        fields:
+          - name: Abbreviation
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Abbreviation
+            description: >
+              Three-letter driver abbreviation. Matches the Driver column in
+              laps, telemetry, car_data, and pos_data.
+            ai_context:
+              synonyms: ["driver code", "driver abbreviation", "driver"]
+
+          - name: FullName
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: FullName
+            description: Driver full name, e.g. "Max Verstappen".
+            ai_context:
+              synonyms: ["driver name", "name"]
+
+          - name: TeamName
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: TeamName
+            description: >
+              Constructor name. Matches Team in the laps table.
+            ai_context:
+              synonyms: ["constructor", "team"]
+
+          - name: Position
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Position
+            description: >
+              Numeric finishing position. NULL if not classified.
+              Use ClassifiedPosition for the official string status.
+            ai_context:
+              synonyms: ["finish position", "finishing position", "place"]
+
+          - name: ClassifiedPosition
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: ClassifiedPosition
+            description: >
+              Official FIA classification. Values: "1"–"20" for classified
+              finishers; "NC" (not classified, finished but too few laps);
+              "R" (retired); "D" (disqualified); "E" (excluded);
+              "W" (withdrawn); "F" (failed to qualify); "N" (not started).
+
+          - name: GridPosition
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: GridPosition
+            description: >
+              Starting grid position. 0 = pit lane start.
+              Compare with Position to calculate positions gained/lost.
+            ai_context:
+              synonyms: ["grid", "starting position", "qualifying position"]
+
+          - name: Points
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Points
+            description: >
+              Championship points scored in this session, including the
+              1-point fastest lap bonus if applicable.
+            ai_context:
+              synonyms: ["championship points", "WCC points", "WDC points"]
+
+          - name: Q1_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Q1_ns
+            description: >
+              Best Q1 lap time in nanoseconds. NULL for non-qualifying sessions.
+              Divide by 1e9 for seconds.
+
+          - name: Q2_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Q2_ns
+            description: >
+              Best Q2 lap time in nanoseconds. NULL if driver was eliminated in Q1.
+              Divide by 1e9 for seconds.
+
+          - name: Q3_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Q3_ns
+            description: >
+              Best Q3 lap time in nanoseconds. NULL if driver did not reach Q3.
+              Divide by 1e9 for seconds.
+
+          - name: Status
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Status
+            description: >
+              Retirement or finish status string, e.g. "Finished", "+1 Lap",
+              "Engine", "Accident", "Collision", "Mechanical", "Gearbox".
+
+          - name: CountryCode
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: CountryCode
+            description: >
+              IOC three-letter nationality code, e.g. "NED", "GBR", "MON".
+            ai_context:
+              synonyms: ["nationality", "country"]
+
+      # -----------------------------------------------------------------------
+      - name: weather
+        source: f1_weather.default.f1_weather
+        primary_key: [Season, RoundNumber, Session, Time_ns]
+        description: >
+          Weather samples taken approximately once per minute throughout each
+          session. Join to laps via an ASOF/nearest-time join on session
+          metadata + Time_ns to attach conditions to individual laps.
+        ai_context:
+          synonyms:
+            - "conditions"
+            - "temperature"
+            - "rain"
+            - "weather data"
+          instructions: >
+            To attach weather to a lap, use an ASOF join:
+              ASOF JOIN weather w ON l.Season=w.Season AND l.RoundNumber=w.RoundNumber
+              AND l.Session=w.Session AND l.Time_ns >= w.Time_ns
+            Time_ns here is session elapsed time in nanoseconds.
+
+        fields:
+          - name: Time_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Time_ns
+            description: Session elapsed time of this sample in nanoseconds.
+            dimension:
+              is_time: true
+
+          - name: AirTemp
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: AirTemp
+            description: Ambient air temperature in degrees Celsius.
+            ai_context:
+              synonyms: ["air temperature", "ambient temperature"]
+
+          - name: TrackTemp
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: TrackTemp
+            description: >
+              Track surface temperature in degrees Celsius. Strongly affects
+              tyre behaviour and lap time. Generally 10–20°C above AirTemp.
+            ai_context:
+              synonyms: ["track temperature", "surface temperature", "asphalt temperature"]
+
+          - name: Rainfall
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Rainfall
+            description: >
+              true if rain is detected. Use to identify wet sessions or
+              to filter for dry conditions (Rainfall = false).
+            ai_context:
+              synonyms: ["rain", "wet", "precipitation"]
+
+          - name: Humidity
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Humidity
+            description: Relative humidity as a percentage (0–100).
+
+          - name: WindSpeed
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: WindSpeed
+            description: Wind speed in metres per second.
+
+          - name: WindDirection
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: WindDirection
+            description: >
+              Wind direction in degrees using meteorological convention:
+              0/360 = north, 90 = east, 180 = south, 270 = west.
+
+          - name: Pressure
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Pressure
+            description: Atmospheric pressure in millibars.
+
+      # -----------------------------------------------------------------------
+      - name: telemetry
+        source: f1_telemetry.default.f1_telemetry
+        primary_key: [Season, RoundNumber, Session, Driver, SessionTime_ns]
+        description: >
+          Merged and interpolated car + position telemetry sampled at ~240 Hz.
+          Combines car_data and pos_data channels, aligned by session time.
+          Adds computed channels: Distance, RelativeDistance, DriverAhead,
+          DistanceToDriverAhead. Best default for telemetry queries.
+          Rows with Source = "interpolation" are gap-filled by FastF1.
+        ai_context:
+          synonyms:
+            - "telemetry data"
+            - "car data"
+            - "sensor data"
+          instructions: >
+            Time_ns resets to 0 at each lap start (elapsed within lap).
+            SessionTime_ns is the absolute session clock (never resets).
+            Speed is in km/h. Distance is in metres from the lap start line.
+            RelativeDistance is 0.0–1.0 normalised over the lap.
+            DRS >= 10 means DRS is confirmed open/active.
+            X, Y, Z coordinates are in circuit-relative space (1/10 metre units),
+            not geographic coordinates.
+
+        fields:
+          - name: Driver
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Driver
+            description: Three-letter driver abbreviation. Added by the download script.
+
+          - name: Speed
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Speed
+            description: Car speed in km/h.
+            ai_context:
+              synonyms: ["velocity", "car speed"]
+
+          - name: RPM
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: RPM
+            description: Engine revolutions per minute.
+            ai_context:
+              synonyms: ["engine speed", "revs"]
+
+          - name: nGear
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: nGear
+            description: >
+              Gear currently engaged. 0 = neutral.
+              Useful for identifying braking zones (gear decreasing) and
+              acceleration zones (gear increasing).
+            ai_context:
+              synonyms: ["gear", "gear number"]
+
+          - name: Throttle
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Throttle
+            description: >
+              Throttle pedal position as a percentage (0–100).
+              100 = full throttle. Values between 0 and 100 indicate
+              partial throttle or lift-and-coast.
+            ai_context:
+              synonyms: ["throttle position", "gas", "acceleration"]
+
+          - name: Brake
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Brake
+            description: >
+              true if the brake pedal is pressed. Boolean — not a pressure value.
+            ai_context:
+              synonyms: ["braking", "brake pedal"]
+
+          - name: DRS
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: DRS
+            description: >
+              DRS (Drag Reduction System) status code. Values:
+              0/1 = off or unavailable; 8/9 = armed/eligible but not yet open;
+              10/12/14 = open and active.
+              Use DRS >= 10 to identify laps or zones where DRS was open.
+            ai_context:
+              synonyms: ["drag reduction", "DRS open", "DRS zone"]
+
+          - name: Distance
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Distance
+            description: >
+              Cumulative distance from the start of the current lap in metres.
+              Resets to 0 at each lap start. Use for track position analysis.
+            ai_context:
+              synonyms: ["track position", "lap distance"]
+
+          - name: RelativeDistance
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: RelativeDistance
+            description: >
+              Distance normalised to [0, 1] over the lap.
+              0 = start/finish line, 1 = one full lap complete.
+              Allows lap-to-lap comparison independent of absolute distance.
+
+          - name: X
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: X
+            description: >
+              X coordinate in circuit-relative space (1/10 metre units).
+              Divide by 10 for metres. Not geographic.
+
+          - name: "Y"
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: "Y"
+            description: >
+              Y coordinate in circuit-relative space (1/10 metre units).
+              Divide by 10 for metres. Not geographic.
+
+          - name: Z
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Z
+            description: >
+              Z (elevation) coordinate in circuit-relative space (1/10 metre units).
+              Useful for identifying elevation changes through corners.
+
+          - name: DriverAhead
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: DriverAhead
+            description: >
+              Abbreviation of the driver directly ahead on track.
+              Empty string if no car is within range. Use with
+              DistanceToDriverAhead for following distance analysis.
+
+          - name: DistanceToDriverAhead
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: DistanceToDriverAhead
+            description: >
+              Distance in metres to the car ahead on track.
+              Values below ~1 metre indicate very close proximity (DRS range
+              is typically within 1 second / ~20–80 metres depending on speed).
+
+          - name: Source
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Source
+            description: >
+              Origin of this row after channel merge.
+              "car" = raw car telemetry; "pos" = raw position feed;
+              "interpolation" = FastF1 gap-filled between samples.
+              Filter Source != 'interpolation' for raw-only analysis.
+
+          - name: SessionTime_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: SessionTime_ns
+            description: >
+              Absolute session elapsed time of this sample in nanoseconds.
+              Never resets. Use to join telemetry to weather.
+            dimension:
+              is_time: true
+
+          - name: Time_ns
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Time_ns
+            description: >
+              Elapsed time within the current lap in nanoseconds.
+              Resets to 0 at each lap start. Use for within-lap comparisons.
+            dimension:
+              is_time: true
+
+      # -----------------------------------------------------------------------
+      - name: car_data
+        source: f1_car_data.default.f1_car_data
+        primary_key: [Season, RoundNumber, Session, Driver, SessionTime_ns]
+        description: >
+          Raw car telemetry at ~240 Hz: speed, RPM, gear, throttle, brake,
+          DRS. Not merged with position data. Use telemetry for combined
+          car + position analysis; use this table when you only need engine/
+          drivetrain channels and want uninterpolated data.
+        ai_context:
+          synonyms:
+            - "raw telemetry"
+            - "car telemetry"
+            - "CAN data"
+
+        fields:
+          - name: Driver
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Driver
+            description: Three-letter driver abbreviation. Added by the download script.
+
+          - name: Speed
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Speed
+            description: Car speed in km/h.
+
+          - name: RPM
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: RPM
+            description: Engine revolutions per minute.
+
+          - name: nGear
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: nGear
+            description: Gear engaged (0 = neutral).
+
+          - name: Throttle
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Throttle
+            description: Throttle pedal position as a percentage (0–100).
+
+          - name: Brake
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Brake
+            description: true if the brake pedal is pressed.
+
+          - name: DRS
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: DRS
+            description: >
+              DRS status code. Use DRS >= 10 for confirmed open DRS.
+              See telemetry.DRS for full value reference.
+
+      # -----------------------------------------------------------------------
+      - name: pos_data
+        source: f1_pos_data.default.f1_pos_data
+        primary_key: [Season, RoundNumber, Session, Driver, SessionTime_ns]
+        description: >
+          Raw GPS/positional telemetry at ~15–20 Hz: X, Y, Z circuit
+          coordinates and on/off track status. Not merged with car channels.
+          Use telemetry for combined analysis; use this table for track
+          mapping or position-only queries where higher fidelity per-sample
+          timestamps matter.
+        ai_context:
+          synonyms:
+            - "GPS data"
+            - "position data"
+            - "track position"
+            - "coordinates"
+
+        fields:
+          - name: Driver
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Driver
+            description: Three-letter driver abbreviation. Added by the download script.
+
+          - name: X
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: X
+            description: X coordinate in circuit-relative space (1/10 metre units).
+
+          - name: "Y"
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: "Y"
+            description: Y coordinate in circuit-relative space (1/10 metre units).
+
+          - name: Z
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Z
+            description: Z (elevation) coordinate in circuit-relative space (1/10 metre units).
+
+          - name: Status
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Status
+            description: >
+              "OnTrack" or "OffTrack". Use Status = 'OffTrack' to identify
+              excursions, spins, or off-track incidents.
+            ai_context:
+              synonyms: ["track limits", "off track", "on track"]
+
+      # -----------------------------------------------------------------------
+      - name: schedule
+        source: f1_schedule.default.f1_schedule
+        primary_key: [Season, RoundNumber]
+        description: >
+          Season event calendar. One row per event. Contains round numbers,
+          official event names, countries, locations, individual session dates,
+          and the event format (conventional vs sprint weekend).
+        ai_context:
+          synonyms:
+            - "calendar"
+            - "race calendar"
+            - "season schedule"
+            - "event list"
+
+        fields:
+          - name: Season
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Season
+            description: Championship year.
+            dimension:
+              is_time: true
+
+          - name: RoundNumber
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: RoundNumber
+            description: Round number within the season (1-indexed).
+
+          - name: EventName
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: EventName
+            description: >
+              Shortened event name used across all other tables,
+              e.g. "Bahrain Grand Prix".
+
+          - name: OfficialEventName
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: OfficialEventName
+            description: Full FOM official event name including sponsor.
+
+          - name: EventFormat
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: EventFormat
+            description: >
+              "conventional" = FP1/FP2/FP3/Qualifying/Race (standard weekend).
+              "sprint_shootout" = FP1/Sprint Qualifying/Sprint Shootout/Qualifying/Sprint/Race.
+              Use to identify sprint weekends when all sessions differ from normal.
+            ai_context:
+              synonyms: ["sprint weekend", "race format"]
+
+          - name: EventDate
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: EventDate
+            description: Scheduled date of the main race.
+            dimension:
+              is_time: true
+
+          - name: Country
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Country
+            description: Host country.
+
+          - name: Location
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: Location
+            description: Circuit city or venue name, e.g. "Sakhir", "Monaco", "Silverstone".
+            ai_context:
+              synonyms: ["circuit", "venue", "track", "city"]
+
+    # -------------------------------------------------------------------------
+    relationships:
+
+      - name: laps_to_results
+        from: laps
+        to: results
+        from_columns: [Season, RoundNumber, Session, Driver]
+        to_columns: [Season, RoundNumber, Session, Abbreviation]
+        ai_context:
+          instructions: >
+            Join laps to results to combine lap-level timing with session
+            classification (position, points, grid position, driver full name).
+
+      - name: laps_to_schedule
+        from: laps
+        to: schedule
+        from_columns: [Season, RoundNumber]
+        to_columns: [Season, RoundNumber]
+        ai_context:
+          instructions: >
+            Join laps to schedule to filter by EventFormat (e.g. sprint weekends)
+            or to access OfficialEventName and session date metadata.
+
+      - name: results_to_schedule
+        from: results
+        to: schedule
+        from_columns: [Season, RoundNumber]
+        to_columns: [Season, RoundNumber]
+
+      - name: telemetry_to_laps
+        from: telemetry
+        to: laps
+        from_columns: [Season, RoundNumber, Session, Driver]
+        to_columns: [Season, RoundNumber, Session, Driver]
+        ai_context:
+          instructions: >
+            Telemetry rows belong to laps matched by driver and session.
+            Note: telemetry is high-frequency (~240 Hz); joining directly to
+            laps produces a many-to-one relationship (many telemetry rows per lap).
+            Use SessionTime_ns / Time_ns to slice telemetry within a specific lap.
+
+      - name: car_data_to_laps
+        from: car_data
+        to: laps
+        from_columns: [Season, RoundNumber, Session, Driver]
+        to_columns: [Season, RoundNumber, Session, Driver]
+
+      - name: pos_data_to_laps
+        from: pos_data
+        to: laps
+        from_columns: [Season, RoundNumber, Session, Driver]
+        to_columns: [Season, RoundNumber, Session, Driver]
+
+    # -------------------------------------------------------------------------
+    metrics:
+
+      - name: avg_green_lap_time_s
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: >
+                AVG(CASE WHEN laps.IsAccurate = true AND laps.TrackStatus = '1'
+                         THEN laps.LapTime_ns / 1e9 END)
+        description: >
+          Average lap time in seconds, restricted to accurate laps run under
+          green flag conditions (no safety car, yellow flags, or VSC).
+          The standard metric for representative race pace comparison.
+        ai_context:
+          synonyms:
+            - "race pace"
+            - "average lap time"
+            - "mean lap time"
+            - "pace"
+
+      - name: fastest_lap_s
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: MIN(laps.LapTime_ns / 1e9)
+        description: >
+          Fastest (minimum) lap time in seconds across the selected rows.
+          Apply appropriate filters (IsAccurate, TrackStatus) before aggregating.
+        ai_context:
+          synonyms:
+            - "best lap"
+            - "fastest lap time"
+            - "quickest lap"
+            - "pole time"
+
+      - name: positions_gained
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: >
+                AVG(CAST(results.GridPosition AS DOUBLE)
+                    - CAST(results.Position AS DOUBLE))
+        description: >
+          Average positions gained from grid to finish (positive = moved forward,
+          negative = lost positions). Only meaningful for Race sessions.
+          Requires GridPosition and Position both to be non-NULL.
+        ai_context:
+          synonyms:
+            - "position change"
+            - "places gained"
+            - "grid vs finish"
+            - "overtakes"
+
+      - name: full_throttle_pct
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: >
+                100.0 * SUM(CASE WHEN telemetry.Throttle = 100 THEN 1 ELSE 0 END)
+                / NULLIF(COUNT(*), 0)
+        description: >
+          Percentage of telemetry samples where the driver is at 100% throttle.
+          A proxy for how power-limited (versus downforce-limited) a circuit is.
+          High values (~70%+) indicate power tracks like Monza; lower values
+          indicate technical circuits like Monaco.
+        ai_context:
+          synonyms:
+            - "full throttle percentage"
+            - "throttle time"
+            - "wide open throttle"
+            - "WOT percentage"
+
+      - name: top_speed_kmh
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: MAX(telemetry.Speed)
+        description: >
+          Maximum recorded speed in km/h. From telemetry (preferred) or
+          SpeedST from laps as an alternative.
+        ai_context:
+          synonyms:
+            - "top speed"
+            - "maximum speed"
+            - "vmax"
+            - "speed trap"
+
+      - name: avg_tyre_life_at_pit
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: >
+                AVG(CASE WHEN laps.PitInTime_ns IS NOT NULL
+                         THEN laps.TyreLife END)
+        description: >
+          Average tyre age (laps) at the point of pitting. Measures how long
+          teams run each stint before stopping. Higher values = longer stints /
+          harder compounds favoured.
+        ai_context:
+          synonyms:
+            - "stint length"
+            - "tyre life"
+            - "pit window"
+            - "average stint"
+
+      - name: total_points
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: SUM(results.Points)
+        description: >
+          Total championship points scored across the selected rows.
+          Group by Driver or TeamName for standings queries.
+        ai_context:
+          synonyms:
+            - "championship points"
+            - "points tally"
+            - "WDC points"
+            - "WCC points"
+
+      - name: podium_rate
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: >
+                100.0 * SUM(CASE WHEN results.Position <= 3 THEN 1 ELSE 0 END)
+                / NULLIF(COUNT(*), 0)
+        description: >
+          Percentage of race starts that resulted in a podium finish (P1–P3).
+          Filter Session = 'Race' and ClassifiedPosition not in ('NC','R','D','E','W').
+        ai_context:
+          synonyms:
+            - "podium percentage"
+            - "podium finish rate"
+            - "p1-p3 rate"
+
+      - name: win_rate
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: >
+                100.0 * SUM(CASE WHEN results.Position = 1 THEN 1 ELSE 0 END)
+                / NULLIF(COUNT(*), 0)
+        description: >
+          Percentage of race starts that resulted in a race win.
+          Filter Session = 'Race' before aggregating.
+        ai_context:
+          synonyms:
+            - "win percentage"
+            - "victory rate"
+            - "wins per start"
