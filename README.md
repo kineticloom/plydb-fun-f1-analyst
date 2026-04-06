@@ -1,5 +1,9 @@
 # F1 Analyst
 
+Accompanying [blog post](https://www.plydb.com/blog/plydb-fun-f1-analyst/).
+
+---
+
 Bring your own AI agent and ask questions about F1 data in plain English — no
 SQL required.
 
